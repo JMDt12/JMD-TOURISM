@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useT } from '../context/LanguageContext.jsx';
 
 /**
@@ -18,6 +18,12 @@ const TABS = [
 
 export default function BottomNav() {
   const t = useT();
+  const { pathname } = useLocation();
+
+  // Tapping the tab you are already on goes back to its top, as apps do.
+  const toTop = (to) => () => {
+    if (pathname === to) window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <nav
@@ -30,6 +36,7 @@ export default function BottomNav() {
             <NavLink
               to={to}
               end={end}
+              onClick={toTop(to)}
               className={({ isActive }) =>
                 `flex h-[3.75rem] flex-col items-center justify-center gap-0.5 text-[10px] font-semibold transition ${
                   isActive ? 'text-indigo-brand' : 'text-ink-soft'

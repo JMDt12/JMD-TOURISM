@@ -1,5 +1,5 @@
-import { Suspense, useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigationType } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../lib/api.js';
 import { BRAND, PHONES, CONTROL_ROOM, telLink, waLink } from '../lib/brand.js';
@@ -46,6 +46,7 @@ export default function Layout() {
         dangerouslySetInnerHTML={{ __html: safeJsonLd(organizationJsonLd()) }}
       />
 
+      <ScrollToTop />
       <BusIntro />
       <LanguagePicker />
 
@@ -320,4 +321,57 @@ function Footer() {
       </div>
     </footer>
   );
+}
+
+/**
+ * A new page opens at its top. Without this, tapping a tab from the footer
+ * changed the page but left the view on the footer - identical on every
+ * page - so on a phone every tab looked dead.
+ *
+ * Back and forward return to where the reader was. The browser's own
+ * restore fires before the page's data has arrived (the page is still
+ * short), so positions are kept per history entry and re-applied once the
+ * page is tall enough, for up to two seconds.
+ */
+const scrollPositions = new Map();
+
+function ScrollToTop() {
+  const location = useLocation();
+  const type = useNavigationType();
+
+  const current = useRef(location.key);
+
+  useEffect(() => {
+    if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
+    // Recorded as the reader scrolls: by the time a link has been followed,
+    // the next page has already rendered and moved the position.
+    let pending = 0;
+    const onScroll = () => {
+      if (pending) return;
+      pending = requestAnimationFrame(() => {
+        pending = 0;
+        scrollPositions.set(current.current, window.scrollY);
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const key = location.key;
+    const target = type === 'POP' ? scrollPositions.get(key) ?? 0 : 0;
+    current.current = null; // ignore scroll events caused by the jump itself
+    let frame;
+    const started = performance.now();
+    const apply = () => {
+      const reachable = document.documentElement.scrollHeight - window.innerHeight >= target;
+      window.scrollTo(0, reachable ? target : document.documentElement.scrollHeight);
+      if (!reachable && performance.now() - started < 2000) frame = requestAnimationFrame(apply);
+      else current.current = key;
+    };
+    apply();
+    return () => cancelAnimationFrame(frame);
+  }, [location.key, type]);
+
+  return null;
 }
