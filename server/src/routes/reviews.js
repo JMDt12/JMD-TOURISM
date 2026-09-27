@@ -1,8 +1,13 @@
 import express from 'express';
 import { query, one, json, jsonParam } from '../db/index.js';
 import { requireAuth } from '../lib/auth.js';
+import { localDate } from '../lib/timezone.js';
 
 const router = express.Router();
+
+/** The trip has happened: completed, or its travel day is over. */
+const travelled = (b) => b.booking_status === 'completed'
+  || (b.booking_status === 'confirmed' && b.travel_date && String(b.travel_date) < localDate(Date.now()));
 
 /** Reviews are only accepted against a completed booking the reviewer owns. */
 router.post('/', requireAuth(), async (req, res) => {
@@ -17,6 +22,18 @@ router.post('/', requireAuth(), async (req, res) => {
   }
   if (!['confirmed', 'completed'].includes(booking.booking_status)) {
     return res.status(400).json({ error: 'Only confirmed trips can be reviewed.' });
+  }
+  if (!travelled(booking)) {
+    return res.status(400).json({ error: 'You can review this trip once you have travelled.' });
+  }
+  // Only the guide who was actually on this trip may be rated through it;
+  // otherwise any customer could move any guide's average.
+  const bookedGuides = json(booking.addons).filter((a) => a.code === 'guide').map((a) => Number(a.guideId));
+  if (guideId && !bookedGuides.includes(Number(guideId))) {
+    return res.status(400).json({ error: 'That guide was not on this trip.' });
+  }
+  if (!Array.isArray(photos)) {
+    return res.status(400).json({ error: 'Photos must be a list.' });
   }
   const already = await one(
     'SELECT id FROM reviews WHERE booking_id = $1 AND user_id = $2',
@@ -47,7 +64,7 @@ router.post('/', requireAuth(), async (req, res) => {
 /** Reviews awaiting the customer: paid trips they have not rated yet. */
 router.get('/pending', requireAuth(), async (req, res) => {
   const rows = await query(
-    `SELECT b.reference, b.travel_date, b.addons, r.origin_city, r.destination_city
+    `SELECT b.reference, b.travel_date, b.booking_status, b.addons, r.origin_city, r.destination_city
      FROM bookings b
      LEFT JOIN trips t ON t.id = b.trip_id
      LEFT JOIN routes r ON r.id = t.route_id
@@ -56,7 +73,8 @@ router.get('/pending', requireAuth(), async (req, res) => {
     [req.user.sub]
   );
   res.json({
-    pending: rows.map((b) => ({
+    // Asking "how was it?" before the trip has happened reads as a glitch.
+    pending: rows.filter(travelled).map((b) => ({
       reference: b.reference,
       travelDate: b.travel_date,
       label: b.origin_city ? `${b.origin_city} to ${b.destination_city}` : 'Package booking',

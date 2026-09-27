@@ -176,12 +176,18 @@ try {
   must(unnamed.status === 409 && unnamed.json.error === 'name_required',
     `a new number was signed up without a name (${unnamed.status})`);
 
-  const again = await call('/api/auth/otp/request', { method: 'POST', body: { phone: goodPhone } });
+  // The same code, now with a name: that is exactly what the screen does.
+  // This check once asked for a second code first, which hid the bug where
+  // the first code was spent by the name prompt and every sign-up failed.
   const good = await call('/api/auth/otp/verify', {
-    method: 'POST', body: { phone: goodPhone, code: again.json.devCode, name: 'Guard Signup' },
+    method: 'POST', body: { phone: goodPhone, code: fresh.json.devCode, name: 'Guard Signup' },
   });
-  must(good.status === 200 && good.json.token, 'the correct OTP code stopped working');
-  step('a new number is asked for a name, then the correct code signs them in');
+  must(good.status === 200 && good.json.token, `the same code failed once a name was given (${good.status})`);
+  const reuse = await call('/api/auth/otp/verify', {
+    method: 'POST', body: { phone: goodPhone, code: fresh.json.devCode },
+  });
+  must(reuse.status !== 200, 'a code worked twice');
+  step('a new number is asked for a name, then the same code signs them in, once');
 
   // Unlimited sends is a way to bill someone else's phone.
   const floodPhone = freshPhone();
@@ -224,6 +230,47 @@ try {
   });
   must(anonymous.status === 401, `password change worked without signing in (${anonymous.status})`);
   step('changing a password needs a session, the current password, and 10+ characters');
+
+  // -- HQ actions happen once ----------------------------------------------
+  // Confirming twice once awarded loyalty points twice.
+  const pointsBefore = (await call('/api/auth/me', { token })).json.user.loyaltyPoints;
+  const reconfirm = await call(`/api/admin/enquiries/${ref}/confirm`, { method: 'POST', token: adminToken });
+  const pointsAfter = (await call('/api/auth/me', { token })).json.user.loyaltyPoints;
+  must(reconfirm.status === 409, `a confirmed enquiry was confirmed again (${reconfirm.status})`);
+  must(pointsAfter === pointsBefore, `a second confirm awarded points again (${pointsBefore} -> ${pointsAfter})`);
+  step('a confirmed enquiry cannot be confirmed again, so points are awarded once');
+
+  // -- a bus's crew only -----------------------------------------------------
+  // Any driver account could read any bus's passenger names and numbers,
+  // check in its tickets, or move it on the map.
+  const driverA = (await call('/api/auth/login', { method: 'POST', body: { phone: '9000000011', password: STAFF_PASSWORD } })).json.token;
+  const driverB = (await call('/api/auth/login', { method: 'POST', body: { phone: '9000000012', password: STAFF_PASSWORD } })).json.token;
+  must(driverA && driverB, 'could not sign in two drivers');
+  const tripA = (await call('/api/driver/schedule', { token: driverA })).json.trips[0];
+  must(tripA, 'driver A has no trips; reseed the demo data');
+  const peek = await call(`/api/driver/trips/${tripA.id}/manifest`, { token: driverB });
+  must(peek.status === 403, `another bus's manifest was readable by a different driver (${peek.status})`);
+  const own = await call(`/api/driver/trips/${tripA.id}/manifest`, { token: driverA });
+  must(own.status === 200, `a driver could not read their own manifest (${own.status})`);
+  const spoof = await call(`/api/tracking/${tripA.id}/location`, {
+    method: 'POST', token: driverB, body: { lat: 27.5, lng: 77.7 },
+  });
+  must(spoof.status === 403, `a driver moved another bus on the map (${spoof.status})`);
+  const share = await call(`/api/driver/trips/${tripA.id}/sharing`, { method: 'POST', token: driverB, body: { on: true } });
+  must(share.status === 403, `a driver switched on sharing for another bus (${share.status})`);
+  step("a driver sees and moves only their own bus: manifest, location and sharing");
+
+  // -- malformed input is a 400, not a crash ---------------------------------
+  const junk = await call('/api/bookings', { method: 'POST', token, body: { tripId: trip.id, passengers: 'everyone' } });
+  must(junk.status === 400, `a malformed enquiry returned ${junk.status}, expected 400`);
+  step('a malformed enquiry is refused with a message, not a server error');
+
+  // -- reviews ---------------------------------------------------------------
+  // A review could name any guide and move their average, and could be left
+  // before the trip had happened.
+  const early = await call('/api/reviews', { method: 'POST', token, body: { reference: ref, rating: 1, guideId: 1 } });
+  must(early.status === 400, `a trip was reviewed before it happened (${early.status})`);
+  step('a trip cannot be reviewed before it has happened');
 
   console.log(`\nGuard rails passed (${steps.length} checks).`);
   process.exit(0);

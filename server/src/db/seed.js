@@ -6,6 +6,7 @@
  * Run with: npm run seed --workspace=server   (add --fresh to wipe first)
  */
 import 'dotenv/config';
+import '../lib/timezone.js';
 import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { query, migrate, getDb, json, jsonParam } from './index.js';

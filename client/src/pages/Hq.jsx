@@ -91,7 +91,7 @@ const Kpi = ({ label, value, tone }) => (
  */
 function Enquiries({ onChange }) {
   const [status, setStatus] = useState('');
-  const { data, loading, reload } = useApi(`/admin/enquiries${status ? `?status=${status}` : ''}`);
+  const { data, loading, error, reload } = useApi(`/admin/enquiries${status ? `?status=${status}` : ''}`);
   const [busy, setBusy] = useState(null);
   const [notice, setNotice] = useState(null);
 
@@ -134,7 +134,7 @@ function Enquiries({ onChange }) {
         </p>
       )}
 
-      {loading ? <Spinner /> : !data?.enquiries?.length ? (
+      {loading ? <Spinner /> : error ? <ErrorNote error={error} onRetry={reload} /> : !data?.enquiries?.length ? (
         <Empty title="Nothing in the queue" hint="New trip requests land here as travellers send them." />
       ) : (
         <div className="space-y-3">
@@ -275,8 +275,9 @@ function LiveMap() {
 }
 
 function Fleet() {
-  const { data, loading } = useApi('/admin/buses');
+  const { data, loading, error, reload } = useApi('/admin/buses');
   if (loading) return <Spinner />;
+  if (error || !data) return <ErrorNote error={error} onRetry={reload} />;
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {data.buses.map((b) => (
@@ -306,9 +307,10 @@ function Fleet() {
 }
 
 function GuideQueue({ onChange }) {
-  const { data, loading, reload } = useApi('/admin/guides');
+  const { data, loading, error, reload } = useApi('/admin/guides');
   const [busy, setBusy] = useState(null);
   if (loading) return <Spinner />;
+  if (error || !data) return <ErrorNote error={error} onRetry={reload} />;
 
   const decide = async (id, approve) => {
     setBusy(id);
@@ -347,8 +349,9 @@ function GuideQueue({ onChange }) {
 }
 
 function Analytics() {
-  const { data, loading } = useApi('/admin/analytics/routes');
+  const { data, loading, error, reload } = useApi('/admin/analytics/routes');
   if (loading) return <Spinner />;
+  if (error || !data) return <ErrorNote error={error} onRetry={reload} />;
   const max = Math.max(1, ...data.demandByRoute.map((r) => r.enquiries));
 
   return (
@@ -399,7 +402,7 @@ function Analytics() {
 
 /** WhatsApp broadcast plus the outbox of what actually went out. */
 function Outbox() {
-  const { data, loading, reload } = useApi('/admin/notifications');
+  const { data, loading, error, reload } = useApi('/admin/notifications');
   const [segment, setSegment] = useState('upcoming');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -434,7 +437,7 @@ function Outbox() {
               <option value="drivers">All drivers</option>
             </select>
           </div>
-          <textarea className="field" rows={4} value={message} placeholder="Type the message…"
+          <textarea aria-label="Message" className="field" rows={4} value={message} placeholder="Type the message…"
                     onChange={(e) => setMessage(e.target.value)} />
           <button className="btn btn-primary w-full" disabled={busy || message.trim().length < 5} onClick={send}>
             {busy ? 'Queuing…' : 'Send broadcast'}
@@ -448,7 +451,7 @@ function Outbox() {
           <h2 className="font-display text-xl">Outbox</h2>
           <button className="text-xs underline" onClick={reload}>Refresh</button>
         </div>
-        {loading ? <Spinner /> : (
+        {loading ? <Spinner /> : error ? <ErrorNote error={error} onRetry={reload} /> : (
           <ul className="mt-3 max-h-[28rem] divide-y divide-line overflow-y-auto text-sm">
             {(data?.notifications ?? []).map((n) => (
               <li key={n.id} className="py-3">

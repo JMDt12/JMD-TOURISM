@@ -123,6 +123,13 @@ router.put('/me/profile', requireAuth('guide'), async (req, res) => {
   const g = await myGuide(req.user.sub);
   if (!g) return res.status(404).json({ error: 'No guide profile on this account.' });
   const { bio, languages, specialty, itineraries, idProofUrl } = req.body;
+  // HQ opens this link while verifying; only a plain web address is allowed.
+  if (idProofUrl && !/^https:\/\/\S+$/i.test(String(idProofUrl))) {
+    return res.status(400).json({ error: 'The ID proof link must start with https://' });
+  }
+  if ((languages && !Array.isArray(languages)) || (itineraries && !Array.isArray(itineraries))) {
+    return res.status(400).json({ error: 'Languages and itineraries must be lists.' });
+  }
   await query(
     `UPDATE guides SET bio = $1, languages = $2, specialty = $3,
        itineraries = $4, id_proof_url = COALESCE($5, id_proof_url)

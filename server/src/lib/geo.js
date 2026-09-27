@@ -62,3 +62,36 @@ export function pointAlong(path, t) {
   }
   return { ...path[path.length - 1] };
 }
+
+/**
+ * How far along a path (0..1) a real GPS fix is: project it onto the nearest
+ * leg and count the distance up to there. A driver's phone reports a raw
+ * position, not a progress figure, and the tracker's ETA needs the latter.
+ */
+export function progressAlong(path, point) {
+  if (!path || path.length < 2 || !point) return 0;
+  const legs = [];
+  let total = 0;
+  for (let i = 1; i < path.length; i += 1) {
+    const d = haversine(path[i - 1], path[i]);
+    legs.push(d);
+    total += d;
+  }
+  if (!total) return 0;
+  let best = { dist: Infinity, along: 0 };
+  let before = 0;
+  for (let i = 0; i < legs.length; i += 1) {
+    const a = path[i];
+    const b = path[i + 1];
+    // Flat projection is plenty at leg scale for choosing the nearest leg.
+    const ax = a.lng, ay = a.lat, bx = b.lng, by = b.lat;
+    const dx = bx - ax, dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    const f = len2 ? Math.max(0, Math.min(1, ((point.lng - ax) * dx + (point.lat - ay) * dy) / len2)) : 0;
+    const proj = { lat: ay + dy * f, lng: ax + dx * f };
+    const dist = haversine(proj, point);
+    if (dist < best.dist) best = { dist, along: before + legs[i] * f };
+    before += legs[i];
+  }
+  return Math.max(0, Math.min(1, best.along / total));
+}

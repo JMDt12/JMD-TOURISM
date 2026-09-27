@@ -52,6 +52,13 @@ let impl;
 
 async function createPgDriver(url) {
   const { default: pg } = await import('pg');
+  // Return dates the way SQLite does: DATE as 'YYYY-MM-DD', timestamps as ISO
+  // strings. pg's default is a JS Date, and code written against SQLite then
+  // breaks only in production - String(date).slice(0, 10) yields 'Sun Sep 27',
+  // and comparing two Dates as strings compares their weekday names.
+  pg.types.setTypeParser(1082, (v) => v);
+  pg.types.setTypeParser(1184, (v) => new Date(v).toISOString());
+  pg.types.setTypeParser(1114, (v) => new Date(`${v.replace(' ', 'T')}Z`).toISOString());
   // Hosted Postgres (Supabase, Neon, RDS) requires TLS; a local server usually
   // has none. PGSSL=off forces plain connections for an unusual remote setup.
   const host = new URL(url).hostname;

@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client';
+import { getToken } from './api.js';
 
 /**
  * Live tracking needs a long-lived connection straight to the API server.
@@ -8,4 +9,9 @@ import { io } from 'socket.io-client';
  */
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || undefined;
 
-export const connectSocket = () => io(SOCKET_URL, { transports: ['websocket', 'polling'] });
+// The sign-in rides along so the server can tell HQ from the public: anyone
+// may follow one trip, but only HQ receives the whole fleet.
+export const connectSocket = () => io(SOCKET_URL, {
+  transports: ['websocket', 'polling'],
+  auth: (cb) => cb({ token: getToken() }),
+});

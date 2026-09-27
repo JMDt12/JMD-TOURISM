@@ -131,7 +131,7 @@ export default function PackageDetail() {
             <p className="font-display text-lg">Request this trip</p>
             <p className="text-xs text-ink-soft">{travellers} traveller{travellers > 1 ? 's' : ''}</p>
           </div>
-          <select className="field w-20" value={travellers}
+          <select aria-label="Travellers" className="field w-20" value={travellers}
                   onChange={(e) => setTravellers(Number(e.target.value))}>
             {[1, 2, 3, 4, 5, 6, 8, 10].map((n) => <option key={n} value={n}>{n}</option>)}
           </select>

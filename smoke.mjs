@@ -137,7 +137,7 @@ const ROUTES = [
   ['/hire/1', null, ['The details', 'What you get', 'Request this', 'Cancellation']],
   ['/guides', null, ['Local guides', 'Verified in person']],
   ['/guides/1', null, ['Ready-made itineraries']],
-  ['/login', null, ['Sign in', 'Demo accounts']],
+  ['/login', null, ['Sign in']],
   ['/track/1', null, ['Your bus', 'Stops on this route']],
   ['/destinations', null, ['Where we run', 'Mathura', 'Ayodhya', 'Bharatpur']],
   ['/destinations/mathura', null,
@@ -168,6 +168,9 @@ for (const [route, role, expects] of ROUTES) {
     // Illustrations replaced the placeholders; the apology must not return.
     if (/photo pending|not yet uploaded/i.test(text)) price.push('a "photo pending" placeholder is showing');
     if (/Station Road, Bhuteshwar|281001/.test(text)) price.push('the old office address is showing');
+    // This bundle is a production build: the live site once printed HQ's
+    // number and a password on the sign-in page for every visitor.
+    if (/Demo accounts|demo1234/.test(text)) price.push('demo logins are showing in a production build');
     // WebSocket is unavailable in jsdom, so socket noise is expected here.
     const bad = errors.filter((e) => !/favicon|socket|websocket|ECONNREFUSED|not implemented/i.test(e));
     if (missing.length || bad.length || price.length) {

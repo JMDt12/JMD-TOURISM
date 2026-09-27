@@ -12,7 +12,12 @@ export default function Login() {
   const { signIn } = useAuth();
   const navigate = useNavigate();
   const { state } = useLocation();
-  const back = state?.from?.pathname ?? '/my-trips';
+  // Return to exactly where sign-in interrupted: the query string, and the
+  // route state that says which bus or tour was being requested. Dropping
+  // that state sent every new customer from "Request this bus" back to search.
+  const from = state?.from;
+  const back = from ? `${from.pathname}${from.search ?? ''}` : '/my-trips';
+  const backState = from?.state;
 
   const [mode, setMode] = useState('otp');
   const [stage, setStage] = useState('phone');
@@ -41,7 +46,7 @@ export default function Login() {
     try {
       const d = await api.post('/auth/otp/verify', { phone, code, name: name || undefined });
       signIn(d.token, d.user);
-      navigate(back, { replace: true });
+      navigate(back, { replace: true, state: backState });
     } catch (e) {
       if (e.body?.error === 'name_required') {
         setNeedName(true);
@@ -56,7 +61,7 @@ export default function Login() {
     const d = await api.post('/auth/login', { phone, password });
     signIn(d.token, d.user);
     navigate(d.user.role === 'admin' ? '/hq' : d.user.role === 'guide' ? '/guide-portal'
-            : d.user.role === 'driver' ? '/driver-portal' : back, { replace: true });
+            : d.user.role === 'driver' ? '/driver-portal' : back, { replace: true, state: backState });
   });
 
   return (
@@ -151,15 +156,19 @@ export default function Login() {
           )}
         </div>
 
-        <div className="mt-6 border-t border-line pt-4 text-xs text-ink-soft">
-          <p className="mb-2 font-semibold">Demo accounts (seeded)</p>
-          <ul className="space-y-0.5">
-            <li>Traveller: 9812345678 (any code shown on screen)</li>
-            <li>Guide: 9000000021 · password demo1234</li>
-            <li>Driver: 9000000012 · password demo1234</li>
-            <li>HQ admin: 9000000001 · password demo1234</li>
-          </ul>
-        </div>
+        {/* Local development only: the live site printed HQ's number and a
+            password to every visitor. */}
+        {import.meta.env.DEV && (
+          <div className="mt-6 border-t border-line pt-4 text-xs text-ink-soft">
+            <p className="mb-2 font-semibold">Demo accounts (seeded)</p>
+            <ul className="space-y-0.5">
+              <li>Traveller: 9812345678 (any code shown on screen)</li>
+              <li>Guide: 9000000021 · password demo1234</li>
+              <li>Driver: 9000000012 · password demo1234</li>
+              <li>HQ admin: 9000000001 · password demo1234</li>
+            </ul>
+          </div>
+        )}
       </Card>
 
       <div className="mt-4 flex justify-center"><SourceBadge /></div>

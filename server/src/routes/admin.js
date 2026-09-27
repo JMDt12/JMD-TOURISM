@@ -12,6 +12,7 @@ import { requireAuth } from '../lib/auth.js';
 import { notify } from '../lib/notify.js';
 import { POINTS_PER_TRIP } from '../lib/trip-options.js';
 import { releaseTrip, shapeBooking } from './bookings.js';
+import { formatLocal } from '../lib/timezone.js';
 
 const router = express.Router();
 router.use(requireAuth('admin'));
@@ -158,6 +159,19 @@ router.post('/enquiries/:reference/:action', async (req, res) => {
   const b = await one('SELECT * FROM bookings WHERE reference = $1', [reference]);
   if (!b) return res.status(404).json({ error: 'Enquiry not found.' });
 
+  // Which states each action may start from. Confirming twice used to award
+  // loyalty points twice, and a cancelled enquiry could be confirmed again.
+  const allowedFrom = {
+    quote: ['new', 'quoted'],
+    confirm: ['new', 'quoted'],
+    cancel: ['new', 'quoted', 'confirmed'],
+  };
+  if (allowedFrom[action] && !allowedFrom[action].includes(b.booking_status)) {
+    return res.status(409).json({
+      error: `This enquiry is already ${b.booking_status}; it cannot be ${{ quote: 'quoted', confirm: 'confirmed', cancel: 'cancelled' }[action]}.`,
+    });
+  }
+
   const user = await one('SELECT name, phone FROM users WHERE id = $1', [b.user_id]);
 
   if (action === 'quote') {
@@ -232,7 +246,7 @@ router.post('/enquiries/:reference/:action', async (req, res) => {
       data: {
         reference: b.reference,
         summary: shaped.trip
-          ? `${shaped.trip.origin} to ${shaped.trip.destination}, ${new Date(shaped.departure).toLocaleString('en-IN')}`
+          ? `${shaped.trip.origin} to ${shaped.trip.destination}, ${formatLocal(shaped.departure)}`
           : `${shaped.package?.title} starting ${shaped.travelDate}`,
         pickup: shaped.pickup ? `${shaped.pickup.area_name}, ${shaped.pickup.city}` : 'To be confirmed',
         trackUrl: shaped.trackUrl ?? `${PUBLIC_URL}/my-trips`,

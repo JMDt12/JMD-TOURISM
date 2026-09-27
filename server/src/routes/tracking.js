@@ -2,6 +2,7 @@ import express from 'express';
 import { query, one, json } from '../db/index.js';
 import { requireAuth, optionalAuth } from '../lib/auth.js';
 import { CITIES, haversine } from '../lib/geo.js';
+import { canOperate } from '../lib/tracker.js';
 
 export default function trackingRoutes(tracker) {
   const router = express.Router();
@@ -76,10 +77,17 @@ export default function trackingRoutes(tracker) {
   /** Driver push (REST fallback for the socket channel). */
   router.post('/:tripId/location', requireAuth('driver', 'admin'), async (req, res) => {
     const { lat, lng, speed = 0 } = req.body;
-    if (typeof lat !== 'number' || typeof lng !== 'number') {
+    if (typeof lat !== 'number' || typeof lng !== 'number'
+        || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
       return res.status(400).json({ error: 'lat and lng are required numbers.' });
     }
-    const payload = await tracker.push(Number(req.params.tripId), { lat, lng, speed });
+    const tripId = Number(req.params.tripId);
+    if (!(await canOperate(req.user, tripId))) {
+      return res.status(403).json({ error: 'This trip runs on another bus.' });
+    }
+    const payload = await tracker.pushReal(tripId, {
+      lat, lng, speed: Math.max(0, Math.min(200, Number(speed) || 0)),
+    });
     res.json({ position: payload });
   });
 

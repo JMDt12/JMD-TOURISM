@@ -65,6 +65,12 @@ npm test             # in another
 Run the suites against local SQLite, not a shared database: they create bookings and sign-ups.
 If the API is on Postgres, pass its staff password as `STAFF_PASSWORD`.
 
+Run them against Postgres too before a release. Some bugs only exist there: Postgres hands back
+dates as objects where SQLite hands back text, and one such difference once broke every bus
+enquiry on the live site while every SQLite test passed. Point `DATABASE_URL` at a throwaway
+database (never the live one), `npm run seed:fresh` with `SEED_PASSWORD=demo1234`, start the
+server, and run `npm test`.
+
 `npm test` runs three suites.
 
 1. **Routes** — builds a jsdom-compatible bundle and mounts all 26 routes against the live API
@@ -94,6 +100,17 @@ has a test:
 | HQ could confirm two groups onto the same rooms | Both parties arrive, one has nowhere to sleep | Confirming a rental checks free stock on those dates first and refuses with 409 |
 | A stay confirmed with no end date blocked nothing | Rooms already committed still showed as free | The end date is closed at insert, and the overlap query handles a null one |
 | A one-time code could be guessed without limit, and resent without limit | Six digits is not a lock if you get infinite tries; unlimited sends bill someone else's phone | Five wrong guesses then 429; four *outstanding* codes per number then 429. Consuming a code frees a slot, so signing in repeatedly is never locked out |
+
+A second audit, run in a real browser at phone, tablet and desktop sizes and against Postgres,
+added these checks:
+
+| What was wrong | What holds it now |
+| --- | --- |
+| A new customer's code was spent by the "tell us your name" prompt, so the second press always said "incorrect" | The code is spent only when sign-in completes; the guard re-uses the same code |
+| Confirming an enquiry twice awarded loyalty points twice | Each HQ action runs only from the states it makes sense in; 409 otherwise |
+| Any driver could read any bus's passenger list, check in its tickets, or move it on the map | Ownership check on manifest, check-in, sharing and location |
+| A malformed enquiry crashed with a 500 | Validated, 400 with a message |
+| A trip could be reviewed before it happened, and for any guide | Only after travel, and only a guide who was on that booking |
 
 Two smaller hardening fixes went in at the same time: JSON-LD is escaped so a `</script>` inside a
 value cannot end the tag early, and the downloadable trip summary escapes booking values before
@@ -252,11 +269,21 @@ the same bus; the first confirm wins and the second gets a clear 409. Cancelling
 totals on a booking, no payments table. Nothing downstream can display a stale figure because there
 is no figure to read.
 
-**Simulated tracking.** Trips flagged as simulated advance on a compressed clock (a 9-hour run
-finishes in about 12 minutes) but report the road speed the schedule implies, so nothing on screen
-reads as nonsense. The tracking page labels simulated positions explicitly. Real driver pushes use
-the same pipeline — `POST /api/tracking/:id/location` or the `driver:location` socket event — so
-wiring a driver app changes nothing downstream.
+**Real tracking comes from the driver's phone.** "Start sharing location" in the driver portal
+reads the phone's GPS and posts a fix every 15 seconds to `POST /api/tracking/:id/location`; the
+server works out how far along the route that is, for the ETA. Only the driver of that bus (or HQ)
+may post for a trip, see its manifest or check in its tickets. The phone only reports while the
+page is on screen, so the portal asks the screen to stay awake. Anyone may follow one trip by its
+link; the whole-fleet feed goes only to a signed-in HQ socket.
+
+**Simulated tracking (demo only).** With `SIMULATE_TRIPS` unset, a demo fleet advances on a
+compressed clock (a 9-hour run finishes in about 12 minutes) and is topped up as trips finish, so
+the control room never goes empty. The tracking page labels simulated positions. Production sets
+`SIMULATE_TRIPS=off`, and a real driver's fix always replaces a simulated one.
+
+**Indian time, always.** A 5 AM departure from Mathura is on the date on its ticket, not the UTC
+date before it. The server pins itself to `Asia/Kolkata` (`TZ` overrides) for searches, the
+availability calendar, departure-time filters and message timestamps, because hosts run on UTC.
 
 **Mobile first.** Every screen is built at 360px and up: sticky booking bars, horizontally
 scrollable seat decks and date strips, and filters that collapse behind a button on phones.

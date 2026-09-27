@@ -37,15 +37,15 @@ export default function Guides() {
       </header>
 
       <div className="mt-6 flex flex-wrap gap-3">
-        <select className="field w-auto" value={city} onChange={(e) => setCity(e.target.value)}>
+        <select aria-label="City" className="field w-auto" value={city} onChange={(e) => setCity(e.target.value)}>
           <option value="">All base cities</option>
           {(meta?.cities ?? []).map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select className="field w-auto" value={language} onChange={(e) => setLanguage(e.target.value)}>
+        <select aria-label="Language" className="field w-auto" value={language} onChange={(e) => setLanguage(e.target.value)}>
           <option value="">Any language</option>
           {(meta?.languages ?? []).map((l) => <option key={l} value={l}>{l}</option>)}
         </select>
-        <select className="field w-auto" value={sort} onChange={(e) => setSort(e.target.value)}>
+        <select aria-label="Sort guides by" className="field w-auto" value={sort} onChange={(e) => setSort(e.target.value)}>
           <option value="rating">Highest rated</option>
           <option value="experience">Most experienced</option>
         </select>

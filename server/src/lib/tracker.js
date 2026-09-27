@@ -15,8 +15,26 @@
  * Every position is persisted to live_locations and broadcast to the
  * `trip:<id>` room, so a shared tracking link needs no login.
  */
+import jwt from 'jsonwebtoken';
 import { query, one, json } from '../db/index.js';
-import { CITIES, pointAlong, haversine } from './geo.js';
+import { CITIES, pointAlong, haversine, progressAlong } from './geo.js';
+import { JWT_SECRET } from './auth.js';
+
+/**
+ * May this signed-in user run this trip? HQ may run any; a driver only the
+ * trips of a bus they operate. Without this, any driver account could read
+ * another bus's passenger list or move another bus on the map.
+ */
+export async function canOperate(user, tripId) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  if (user.role !== 'driver') return false;
+  const row = await one(
+    'SELECT b.operator_id FROM trips t JOIN buses b ON b.id = t.bus_id WHERE t.id = $1',
+    [Number(tripId)]
+  );
+  return Boolean(row) && Number(row.operator_id) === Number(user.sub);
+}
 
 const TICK_MS = 4000;
 // A simulated trip completes its whole route in this many minutes of wall clock.
@@ -29,7 +47,40 @@ export class Tracker {
     this.meta = new Map();    // tripId -> { km, hrs }
     this.sim = new Map();     // tripId -> { startedAt }
     this.latest = new Map();  // tripId -> position payload
+    this.sharing = new Set(); // tripIds a driver's phone is reporting for
     this.timer = null;
+    this.simTarget = 0;       // demo fleet size to keep on the road; 0 = off
+  }
+
+  /** A driver switched on location sharing: the trip is now under way. */
+  async startSharing(tripId) {
+    const path = await this.pathFor(tripId);
+    if (!path) return false;
+    await query(`UPDATE trips SET status = 'ongoing' WHERE id = $1 AND status = 'scheduled'`, [tripId]);
+    this.sharing.add(tripId);
+    return true;
+  }
+
+  /**
+   * Sharing off. Once the scheduled arrival has passed, that is the end of
+   * the run; otherwise it is a pause (a tea stop, a dead battery).
+   */
+  async stopSharing(tripId) {
+    this.sharing.delete(tripId);
+    this.sim.delete(tripId);
+    await query(
+      `UPDATE trips SET status = 'completed' WHERE id = $1 AND status = 'ongoing' AND arrival_datetime <= $2`,
+      [tripId, new Date().toISOString()]
+    );
+  }
+
+  /** A real fix from a driver's phone. Real data always beats the simulator. */
+  async pushReal(tripId, { lat, lng, speed = 0 }) {
+    this.sim.delete(tripId);
+    this.sharing.add(tripId);
+    const path = await this.pathFor(tripId);
+    const progress = progressAlong(path, { lat, lng });
+    return this.push(tripId, { lat, lng, speed, progress });
   }
 
   /** Origin, any stops we have coordinates for, then destination. */
@@ -118,6 +169,11 @@ export class Tracker {
         this.io.to(`trip:${tripId}`).emit('trip:completed', { tripId });
       }
     }
+    // Demo trips finish in minutes; without a top-up the control room was
+    // empty a quarter of an hour after every restart.
+    if (this.simTarget && this.sim.size < this.simTarget) {
+      await this.seedSimulation(this.simTarget);
+    }
   }
 
   /**
@@ -126,8 +182,10 @@ export class Tracker {
    * otherwise they would sit frozen on the map forever.
    */
   async seedSimulation(count = 6) {
+    this.simTarget = count;
     const adopted = await query(`SELECT id FROM trips WHERE status = 'ongoing' LIMIT $1`, [count]);
-    for (const r of adopted) await this.startSimulation(r.id);
+    // A trip a driver's phone is reporting for is real; never simulate over it.
+    for (const r of adopted) if (!this.sharing.has(r.id)) await this.startSimulation(r.id);
 
     const need = count - this.sim.size;
     if (need > 0) {
@@ -153,17 +211,29 @@ export class Tracker {
 
 export function attachSockets(io, tracker) {
   io.on('connection', (socket) => {
+    // Anyone may follow one trip (the shareable link needs no account), but
+    // the whole-fleet feed is HQ's and positions come only from its driver.
+    let user = null;
+    try {
+      const token = socket.handshake.auth?.token;
+      if (token) user = jwt.verify(token, JWT_SECRET);
+    } catch { /* anonymous */ }
+
     socket.on('trip:subscribe', async (tripId) => {
-      socket.join(`trip:${tripId}`);
-      const last = await tracker.latestFor(Number(tripId));
+      const id = Number(tripId);
+      if (!Number.isInteger(id)) return;
+      socket.join(`trip:${id}`);
+      const last = await tracker.latestFor(id).catch(() => null);
       if (last) socket.emit('trip:location', last);
     });
-    socket.on('trip:unsubscribe', (tripId) => socket.leave(`trip:${tripId}`));
-    socket.on('hq:subscribe', () => socket.join('hq'));
-    // Real driver-app pushes land here.
-    socket.on('driver:location', async ({ tripId, lat, lng, speed }) => {
+    socket.on('trip:unsubscribe', (tripId) => socket.leave(`trip:${Number(tripId)}`));
+    socket.on('hq:subscribe', () => {
+      if (user?.role === 'admin') socket.join('hq');
+    });
+    socket.on('driver:location', async ({ tripId, lat, lng, speed } = {}) => {
       if (!tripId || typeof lat !== 'number' || typeof lng !== 'number') return;
-      await tracker.push(Number(tripId), { lat, lng, speed: speed ?? 0, progress: 0 });
+      if (!(await canOperate(user, tripId).catch(() => false))) return;
+      await tracker.pushReal(Number(tripId), { lat, lng, speed: speed ?? 0 }).catch(() => {});
     });
   });
 }

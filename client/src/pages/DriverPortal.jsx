@@ -38,14 +38,70 @@ export default function DriverPortal() {
   );
 }
 
+/** How often a moving bus reports in. Often enough for the map, easy on data. */
+const GPS_INTERVAL_MS = 15000;
+const hasGps = () => typeof navigator !== 'undefined' && 'geolocation' in navigator;
+
+/**
+ * While sharing is on, send this phone's real position. The browser only
+ * reports while the page is open, so it also asks the screen to stay awake.
+ */
+function useGpsFeed(tripId, active) {
+  const [gps, setGps] = useState({ state: 'idle', message: null, at: null });
+  useEffect(() => {
+    if (!active || !hasGps()) return undefined;
+    let last = 0;
+    let lock = null;
+    navigator.wakeLock?.request('screen').then((l) => { lock = l; }).catch(() => {});
+    setGps({ state: 'waiting', message: 'Waiting for a GPS fix…', at: null });
+    const watch = navigator.geolocation.watchPosition(
+      async (pos) => {
+        const now = Date.now();
+        if (now - last < GPS_INTERVAL_MS) return;
+        last = now;
+        try {
+          await api.post(`/tracking/${tripId}/location`, {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            // Speed arrives in metres per second, or null when standing still.
+            speed: pos.coords.speed != null ? pos.coords.speed * 3.6 : 0,
+          });
+          setGps({ state: 'ok', message: null, at: new Date() });
+        } catch (e) {
+          last = 0; // try again on the next fix
+          setGps({ state: 'error', message: e.message, at: null });
+        }
+      },
+      (err) => setGps({
+        state: 'error',
+        message: err.code === err.PERMISSION_DENIED
+          ? 'Location is blocked. Allow location for this site in your browser settings.'
+          : 'Cannot read GPS right now. Move into the open, or check location is on.',
+        at: null,
+      }),
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 },
+    );
+    return () => {
+      navigator.geolocation.clearWatch(watch);
+      lock?.release?.().catch(() => {});
+    };
+  }, [tripId, active]);
+  return gps;
+}
+
 function TripCard({ t, onReload, open, onOpen }) {
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const gps = useGpsFeed(t.id, t.sharingLocation);
 
   const toggleSharing = async () => {
     setBusy(true);
+    setError(null);
     try {
-      await api.post(`/driver/trips/${t.id}/sharing`, { on: !t.sharingLocation });
+      await api.post(`/driver/trips/${t.id}/sharing`, { on: !t.sharingLocation, gps: hasGps() });
       onReload();
+    } catch (e) {
+      setError(e.message);
     } finally {
       setBusy(false);
     }
@@ -79,12 +135,22 @@ function TripCard({ t, onReload, open, onOpen }) {
           <button className="btn btn-ghost py-1.5 text-sm" onClick={onOpen}>
             {open ? 'Close check-in' : 'Check in passengers'}
           </button>
-          {t.sharingLocation && (
-            <span className="flex items-center gap-1.5 text-xs text-peacock">
-              <span className="live-dot size-2 rounded-full bg-peacock" /> Broadcasting to HQ and travellers
+          {t.sharingLocation && gps.state !== 'error' && (
+            <span className="flex items-center gap-1.5 text-xs text-peacock" role="status">
+              <span className="live-dot size-2 rounded-full bg-peacock" />
+              {gps.state === 'ok'
+                ? `Broadcasting to HQ and travellers · last sent ${time(gps.at)}`
+                : hasGps() ? 'Waiting for a GPS fix…' : 'Broadcasting to HQ and travellers'}
             </span>
           )}
         </div>
+        {t.sharingLocation && gps.state === 'error' && (
+          <p className="mt-2 text-sm text-sindoor" role="alert">{gps.message}</p>
+        )}
+        {t.sharingLocation && (
+          <p className="mt-2 text-xs text-ink-soft">Keep this page open while driving; the phone only reports while it is on screen.</p>
+        )}
+        {error && <p className="mt-2 text-sm text-sindoor" role="alert">{error}</p>}
       </div>
 
       {open && <Manifest tripId={t.id} />}

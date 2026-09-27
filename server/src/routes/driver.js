@@ -1,9 +1,15 @@
 import express from 'express';
 import { query, one, json } from '../db/index.js';
 import { requireAuth } from '../lib/auth.js';
+import { canOperate } from '../lib/tracker.js';
+
+/** The demo GPS simulator is on unless SIMULATE_TRIPS=off (production). */
+const SIMULATION_ALLOWED = process.env.SIMULATE_TRIPS !== 'off';
 
 export default function driverRoutes(tracker) {
   const router = express.Router();
+
+  const otherBus = (res) => res.status(403).json({ error: 'This trip runs on another bus.' });
 
   /** The driver's own schedule for the next few days. */
   router.get('/schedule', requireAuth('driver', 'admin'), async (req, res) => {
@@ -28,7 +34,7 @@ export default function driverRoutes(tracker) {
         busName: t.bus_name, registrationNo: t.registration_no,
         status: t.status, capacity: t.seat_capacity,
         bookings: Number(bookings[0]?.n ?? 0),
-        sharingLocation: tracker.sim.has(t.id) || tracker.latest.has(t.id),
+        sharingLocation: tracker.sim.has(t.id) || tracker.sharing.has(t.id),
       });
     }
     res.json({ trips });
@@ -36,6 +42,8 @@ export default function driverRoutes(tracker) {
 
   /** Passenger manifest for boarding. */
   router.get('/trips/:id/manifest', requireAuth('driver', 'admin'), async (req, res) => {
+    // Names and phone numbers: only for the crew of this bus.
+    if (!(await canOperate(req.user, req.params.id))) return otherBus(res);
     const rows = await query(
       `SELECT b.reference, b.seats_booked, b.party_size, b.passengers, b.checked_in_at, b.booking_status,
               u.name, u.phone, p.area_name, p.city
@@ -70,6 +78,9 @@ export default function driverRoutes(tracker) {
     if (tripId && b.trip_id !== tripId) {
       return res.status(400).json({ error: 'That ticket is for a different trip.' });
     }
+    if (!b.trip_id || !(await canOperate(req.user, b.trip_id))) {
+      return res.status(400).json({ error: 'That ticket is for a different bus.' });
+    }
     if (b.booking_status === 'cancelled') {
       return res.status(400).json({ error: 'This booking was cancelled.' });
     }
@@ -98,13 +109,20 @@ export default function driverRoutes(tracker) {
   /** Toggle location sharing for a trip the driver is running. */
   router.post('/trips/:id/sharing', requireAuth('driver', 'admin'), async (req, res) => {
     const tripId = Number(req.params.id);
+    if (!(await canOperate(req.user, tripId))) return otherBus(res);
     if (req.body.on === false) {
-      tracker.stopSimulation(tripId);
+      await tracker.stopSharing(tripId);
       return res.json({ sharing: false });
     }
-    const started = await tracker.startSimulation(tripId);
+    // Sharing used to start the demo simulator, so a live bus showed a fake
+    // position. Now the driver's phone sends real fixes; the simulator only
+    // stands in on a demo install when the device has no GPS to offer.
+    const started = await tracker.startSharing(tripId);
     if (!started) return res.status(400).json({ error: 'Could not start sharing for this trip.' });
-    res.json({ sharing: true });
+    const simulated = req.body.gps === false && SIMULATION_ALLOWED
+      ? await tracker.startSimulation(tripId)
+      : false;
+    res.json({ sharing: true, simulated });
   });
 
   return router;

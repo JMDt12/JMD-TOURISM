@@ -21,16 +21,28 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   const token = auth ? getToken() : null;
   if (token) headers.authorization = `Bearer ${token}`;
 
-  const res = await fetch(`/api${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  let res;
+  try {
+    res = await fetch(`/api${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    // Offline, or the connection dropped: fetch rejects with "Failed to fetch".
+    throw new ApiError('No connection. Check your internet and try again.', 0, null);
+  }
 
+  // A proxy or a sleeping host answers with an HTML page, not JSON; parsing it
+  // used to surface "Unexpected token '<'" to travellers.
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = null; }
   if (!res.ok) {
-    throw new ApiError(data?.error || `Request failed (${res.status})`, res.status, data);
+    const fallback = res.status >= 502 && res.status <= 504
+      ? 'Our server is waking up. Please try again in a few seconds.'
+      : `Something went wrong (${res.status}). Please try again.`;
+    throw new ApiError(data?.error || fallback, res.status, data);
   }
   return data;
 }

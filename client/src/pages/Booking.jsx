@@ -39,8 +39,23 @@ const STATION_ADDONS = [
  * number — so this collects what the office needs in order to quote, and
  * nothing is committed until the traveller accepts that quote.
  */
-export default function Booking() {
+/**
+ * What is being requested arrives as route state, which a reload drops.
+ * Phones reload background tabs routinely - switching to WhatsApp to check a
+ * number was enough to throw the form away - so keep a copy for the session.
+ */
+const DRAFT_KEY = 'jmd.bookingTarget';
+function useBookingTarget() {
   const { state } = useLocation();
+  if (state?.tripId || state?.packageId || state?.rentalId) {
+    try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(state)); } catch { /* private mode */ }
+    return state;
+  }
+  try { return JSON.parse(sessionStorage.getItem(DRAFT_KEY)) ?? null; } catch { return null; }
+}
+
+export default function Booking() {
+  const state = useBookingTarget();
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -98,6 +113,7 @@ export default function Booking() {
         contactPhone: contact.phone || null,
         contactEmail: contact.email || null,
       });
+      try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* private mode */ }
       navigate(`/confirmation/${created.booking.reference}`, { replace: true });
     } catch (e) {
       setError(e);
@@ -123,15 +139,15 @@ export default function Booking() {
                 </p>
                 <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_90px_110px]">
                   <input
-                    className="field" placeholder="Lead passenger name" value={lead.name}
+                    aria-label="Lead passenger name" className="field" placeholder="Lead passenger name" value={lead.name}
                     autoComplete="name"
                     onChange={(e) => setLead({ ...lead, name: e.target.value })}
                   />
                   <input
-                    className="field" placeholder="Age" inputMode="numeric" value={lead.age}
+                    aria-label="Age" className="field" placeholder="Age" inputMode="numeric" value={lead.age}
                     onChange={(e) => setLead({ ...lead, age: e.target.value.replace(/\D/g, '').slice(0, 3) })}
                   />
-                  <select className="field" value={lead.gender}
+                  <select aria-label="Gender" className="field" value={lead.gender}
                           onChange={(e) => setLead({ ...lead, gender: e.target.value })}>
                     <option value="M">Male</option>
                     <option value="F">Female</option>
@@ -170,7 +186,7 @@ export default function Booking() {
                   <div className="mt-2 space-y-2">
                     {extraNames.map((n, i) => (
                       <input
-                        key={i} className="field" placeholder={`Traveller ${i + 2}`} value={n}
+                        key={i} aria-label={`Traveller ${i + 2} name`} className="field" placeholder={`Traveller ${i + 2}`} value={n}
                         onChange={(e) => setExtraNames((cur) =>
                           cur.map((v, idx) => (idx === i ? e.target.value : v)))}
                       />
@@ -336,7 +352,7 @@ export default function Booking() {
                   it all changes what we quote.
                 </p>
                 <textarea
-                  className="field mt-3" rows={3} value={notes}
+                  aria-label="Notes for the office" className="field mt-3" rows={3} value={notes}
                   placeholder="Optional notes for the Mathura office"
                   onChange={(e) => setNotes(e.target.value)}
                 />

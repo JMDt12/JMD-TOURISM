@@ -297,6 +297,20 @@
   }
 }
 
+/* Text links (phone numbers, the footer, "← All guides") measured 19px tall
+   on phones. Vertical padding on an inline box grows its tap area without
+   moving the line it sits on. In the base layer, so any link that sets its
+   own padding with a utility class keeps it. */
+@layer base {
+  @media (pointer: coarse) {
+    main a:not(.btn),
+    header a:not(.btn),
+    footer a:not(.btn) {
+      padding-block: 0.3rem;
+    }
+  }
+}
+
 /* Notched phones: keep fixed bars clear of the home indicator. */
 :root {
   --tab-h: 3.75rem;

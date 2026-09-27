@@ -139,15 +139,16 @@ router.post('/otp/verify', async (req, res) => {
         : 'That code is incorrect. Ask for a new one.',
     });
   }
-  const row = live;
-  await query('UPDATE otp_codes SET consumed = true WHERE id = $1', [row.id]);
-
   let user = await one('SELECT * FROM users WHERE phone = $1', [phone]);
+  if (!user && !name) {
+    // First-time number: ask for a name and let them retry with the SAME
+    // code. The code used to be spent before this point, so every new
+    // customer got "That code is incorrect" on their second press.
+    return res.status(409).json({ error: 'name_required', message: 'Tell us your name to finish signing up.' });
+  }
+  await query('UPDATE otp_codes SET consumed = true WHERE id = $1', [live.id]);
+
   if (!user) {
-    if (!name) {
-      // First-time number: ask the client to collect a name and retry.
-      return res.status(409).json({ error: 'name_required', message: 'Tell us your name to finish signing up.' });
-    }
     const referrer = req.body.referralCode
       ? await one('SELECT id FROM users WHERE referral_code = $1', [String(req.body.referralCode).toUpperCase()])
       : null;

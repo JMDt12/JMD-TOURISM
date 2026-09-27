@@ -13,8 +13,12 @@ import { requireAuth } from '../lib/auth.js';
 import { describeAddons, ADDON_CATALOG, CANCELLATION_POLICY } from '../lib/trip-options.js';
 import { allSeats } from '../lib/seats.js';
 import { notify } from '../lib/notify.js';
+import { localDate, formatLocal } from '../lib/timezone.js';
 
 const router = express.Router();
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_PASSENGERS = 120;
 
 const PUBLIC_URL = (process.env.PUBLIC_URL || 'http://localhost:5173').trim().replace(/\/$/, '');
 
@@ -90,8 +94,22 @@ router.post('/', requireAuth(), async (req, res) => {
   if (!tripId && !packageId && !rentalId) {
     return res.status(400).json({ error: 'Pick a departure, a tour or a vehicle to enquire about.' });
   }
-  if (!passengers.length) {
+  // A malformed body used to reach .map() and come back as a 500.
+  if (!Array.isArray(passengers) || !passengers.length
+      || passengers.some((p) => !p || typeof p !== 'object' || !String(p.name ?? '').trim())) {
     return res.status(400).json({ error: 'Add the lead passenger.' });
+  }
+  if (passengers.length > MAX_PASSENGERS) {
+    return res.status(400).json({ error: `Send at most ${MAX_PASSENGERS} names; the office takes the rest by phone.` });
+  }
+  if (!Array.isArray(addons)) {
+    return res.status(400).json({ error: 'Add-ons must be a list.' });
+  }
+  if ((travelDate && !ISO_DATE.test(travelDate)) || (endDate && !ISO_DATE.test(endDate))) {
+    return res.status(400).json({ error: 'Dates must be in YYYY-MM-DD form.' });
+  }
+  if (travelDate && endDate && endDate < travelDate) {
+    return res.status(400).json({ error: 'The end date is before the start date.' });
   }
 
   let trip = null;
@@ -127,7 +145,9 @@ router.post('/', requireAuth(), async (req, res) => {
   }
 
   const resolved = await resolveAddons(addons);
-  const startDate = travelDate ?? (trip ? String(trip.departure_datetime).slice(0, 10) : null);
+  // The Indian calendar day of departure: slicing the UTC timestamp would put
+  // anything leaving before 5:30 AM on the day before.
+  const startDate = travelDate ?? (trip ? localDate(trip.departure_datetime) : null);
   const ref = reference();
   const rows = await query(
     `INSERT INTO bookings
@@ -163,7 +183,7 @@ router.post('/', requireAuth(), async (req, res) => {
       name: user.name,
       reference: ref,
       summary: trip
-        ? `${trip.origin_city} to ${trip.destination_city}, ${String(trip.departure_datetime).slice(0, 10)}`
+        ? `${trip.origin_city} to ${trip.destination_city}, ${formatLocal(trip.departure_datetime)}`
         : rentalId
           ? `vehicle or room from ${travelDate}${endDate ? ` to ${endDate}` : ''}`
           : `tour enquiry starting ${travelDate}`,
@@ -206,6 +226,9 @@ router.post('/:reference/cancel', requireAuth(), async (req, res) => {
   }
   if (b.booking_status === 'cancelled') {
     return res.status(400).json({ error: 'This is already cancelled.' });
+  }
+  if (b.booking_status === 'completed') {
+    return res.status(400).json({ error: 'This trip has already happened.' });
   }
 
   await query(`UPDATE bookings SET booking_status = 'cancelled' WHERE id = $1`, [b.id]);

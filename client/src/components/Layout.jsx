@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { api } from '../lib/api.js';
 import { BRAND, PHONES, CONTROL_ROOM, telLink, waLink } from '../lib/brand.js';
-import { SourceBadge, IndiaFlag } from './ui.jsx';
+import { SourceBadge, IndiaFlag, Spinner } from './ui.jsx';
 import BusIntro from './BusIntro.jsx';
 import MoreMenu from './MoreMenu.jsx';
 import BottomNav from './BottomNav.jsx';
@@ -141,7 +141,11 @@ export default function Layout() {
       </header>
 
       <main className="flex-1">
-        <Outlet />
+        {/* Lazy pages (HQ, portals, tracking) load inside the frame, so the
+            header and tab bar stay put instead of the whole site blanking. */}
+        <Suspense fallback={<Spinner />}>
+          <Outlet />
+        </Suspense>
       </main>
 
       <SosButton />
