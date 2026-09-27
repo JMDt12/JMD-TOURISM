@@ -16,7 +16,7 @@ import { releaseTrip, shapeBooking } from './bookings.js';
 const router = express.Router();
 router.use(requireAuth('admin'));
 
-const PUBLIC_URL = process.env.PUBLIC_URL || 'http://localhost:5173';
+const PUBLIC_URL = (process.env.PUBLIC_URL || 'http://localhost:5173').trim().replace(/\/$/, '');
 
 /** Headline numbers for the HQ dashboard. */
 router.get('/overview', async (_req, res) => {

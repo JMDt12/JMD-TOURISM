@@ -16,7 +16,7 @@ import { notify } from '../lib/notify.js';
 
 const router = express.Router();
 
-const PUBLIC_URL = process.env.PUBLIC_URL || 'http://localhost:5173';
+const PUBLIC_URL = (process.env.PUBLIC_URL || 'http://localhost:5173').trim().replace(/\/$/, '');
 
 /** The day after a date, so a same-day handover is not treated as a clash. */
 export const dayAfter = (iso) => {

@@ -22,7 +22,10 @@ import trackingRoutes from './routes/tracking.js';
 import driverRoutes from './routes/driver.js';
 
 const PORT = Number(process.env.PORT || 4000);
-const ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+// Trimmed: a value pasted into a host's settings box often carries a trailing
+// newline, which is illegal in a header and fails every request with a 500.
+// A browser's Origin never ends in a slash, so one here would never match.
+const ORIGIN = (process.env.CLIENT_ORIGIN || 'http://localhost:5173').trim().replace(/\/$/, '');
 
 const app = express();
 const server = http.createServer(app);

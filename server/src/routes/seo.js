@@ -14,7 +14,7 @@ import { query } from '../db/index.js';
 
 const router = express.Router();
 
-const SITE_URL = (process.env.SITE_URL || 'http://localhost:5173').replace(/\/$/, '');
+const SITE_URL = (process.env.SITE_URL || 'http://localhost:5173').trim().replace(/\/$/, '');
 
 /** Slugs kept in step with client/src/lib/destinations.js. */
 const DESTINATIONS = [
