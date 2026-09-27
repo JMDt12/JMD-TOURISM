@@ -1,0 +1,21 @@
+{
+  "name": "jmd-tourism",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Mathura-HQ bus and tourism booking platform",
+  "type": "module",
+  "scripts": {
+    "dev": "node dev.mjs",
+    "dev:server": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client",
+    "seed": "npm run seed --workspace=server",
+    "seed:fresh": "node server/src/db/seed.js --fresh",
+    "build": "npm run build --workspace=client",
+    "test": "node test.mjs",
+    "test:build": "vite build --config client/vite.smoke.config.js"
+  },
+  "workspaces": ["server", "client"],
+  "devDependencies": {
+    "jsdom": "^28.0.1"
+  }
+}

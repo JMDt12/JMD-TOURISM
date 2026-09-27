@@ -1,0 +1,325 @@
+@import 'tailwindcss';
+
+/*
+ * Braj palette: temple-town warmth without the dated tourism-brochure look.
+ * Deep peacock indigo carries the brand, marigold does the calls to action,
+ * everything sits on a warm paper ground rather than clinical white.
+ */
+@theme {
+  --color-ink: #201436;
+  --color-ink-soft: #5a4b6e;
+  --color-paper: #fdf8f0;
+  --color-paper-2: #f6eee1;
+  --color-line: #e7dcc9;
+
+  --color-indigo-brand: #2a1a5e;
+  --color-indigo-600: #3b2a7a;
+  --color-indigo-100: #ece7f8;
+
+  --color-marigold: #e8930c;
+  --color-marigold-dark: #c47707;
+  --color-marigold-100: #fdf0d9;
+
+  --color-peacock: #12776b;
+  --color-peacock-100: #dcf0ed;
+
+  --color-sindoor: #b8392e;
+  --color-sindoor-100: #fbe6e3;
+
+  --font-display: ui-serif, Georgia, 'Times New Roman', serif;
+
+  --radius-card: 14px;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+  /* Never let a wide table or map push the whole page sideways. */
+  body { overflow-x: hidden; }
+  :focus-visible {
+    outline: 2px solid var(--color-indigo-600);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  .card {
+    background: #fff;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 10px;
+    font-weight: 600;
+    padding: 0.7rem 1.1rem;
+    transition: filter 0.15s ease, background 0.15s ease;
+    cursor: pointer;
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: var(--color-marigold); color: #2a1500; }
+  .btn-primary:hover:not(:disabled) { background: var(--color-marigold-dark); color: #fff; }
+  .btn-ink { background: var(--color-indigo-brand); color: #fff; }
+  .btn-ink:hover:not(:disabled) { background: var(--color-indigo-600); }
+  .btn-ghost { border: 1px solid var(--color-line); background: #fff; }
+  .btn-ghost:hover:not(:disabled) { background: var(--color-paper-2); }
+
+  .field {
+    width: 100%;
+    border: 1px solid var(--color-line);
+    background: #fff;
+    border-radius: 10px;
+    padding: 0.65rem 0.8rem;
+    font-size: 0.95rem;
+  }
+  .field:focus { outline: 2px solid var(--color-indigo-600); outline-offset: -1px; }
+
+  .label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-ink-soft);
+    margin-bottom: 0.3rem;
+  }
+
+  /* Thin decorative rule echoing a temple arch band. */
+  .rule-braj {
+    height: 3px;
+    background: repeating-linear-gradient(
+      90deg,
+      var(--color-marigold) 0 10px,
+      var(--color-indigo-brand) 10px 20px
+    );
+    opacity: 0.55;
+  }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.35); opacity: 0.65; }
+}
+.live-dot { animation: pulse-dot 1.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot { animation: none; }
+  * { transition-duration: 0.01ms !important; }
+}
+
+/* ---------------------------------------------------------------------------
+   Click ripple: a marigold ring wherever you tap, in its own pointer-blind
+   layer so it can never swallow a click.
+--------------------------------------------------------------------------- */
+.ripple-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  overflow: hidden;
+}
+.ripple {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 9999px;
+  border: 2px solid var(--color-marigold);
+  background: color-mix(in oklab, var(--color-marigold) 22%, transparent);
+  animation: ripple-out 620ms cubic-bezier(0.22, 0.9, 0.3, 1) forwards;
+}
+@keyframes ripple-out {
+  from { transform: scale(0.4); opacity: 0.85; }
+  to   { transform: scale(7);   opacity: 0; }
+}
+
+/* ---------------------------------------------------------------------------
+   Arrival: a bus drives out of the distance at the viewer on every page load.
+--------------------------------------------------------------------------- */
+.bus-intro {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 62%, #3b2a7a 0%, #2a1a5e 45%, #150d33 100%);
+  animation: intro-curtain 2000ms ease-in forwards;
+}
+@keyframes intro-curtain {
+  0%, 72%  { opacity: 1; }
+  100%     { opacity: 0; visibility: hidden; }
+}
+
+/* Road rushing under the bus, drawn as a receding centre line. */
+.bus-intro__road {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 46%;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 22px,
+      color-mix(in oklab, var(--color-marigold) 55%, transparent) 22px 46px
+    );
+  width: 12px;
+  margin: 0 auto;
+  animation: road-rush 520ms linear infinite;
+  opacity: 0.6;
+}
+@keyframes road-rush {
+  from { background-position-y: 0; }
+  to   { background-position-y: 46px; }
+}
+
+.bus-intro__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  animation: bus-approach 1750ms cubic-bezier(0.55, 0, 0.85, 0.35) forwards;
+}
+@keyframes bus-approach {
+  0%   { transform: scale(0.06) translateY(30px); opacity: 0; }
+  18%  { opacity: 1; }
+  78%  { transform: scale(1.05) translateY(0); opacity: 1; }
+  100% { transform: scale(2.9) translateY(-6px); opacity: 0; }
+}
+
+.bus-intro__bus {
+  width: min(62vw, 320px);
+  filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.45));
+}
+
+/* Headlight glow, pulsing as it closes in. */
+.bus-intro__lamp { animation: lamp-glow 700ms ease-in-out infinite alternate; }
+@keyframes lamp-glow {
+  from { opacity: 0.75; }
+  to   { opacity: 1; }
+}
+.bus-intro__beam {
+  position: absolute;
+  bottom: -6%;
+  width: 78%;
+  height: 60%;
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 240, 200, 0.5), transparent 68%);
+  filter: blur(6px);
+  pointer-events: none;
+}
+
+.bus-intro__word {
+  position: absolute;
+  bottom: 12%;
+  text-align: center;
+  color: #fff;
+  animation: word-in 900ms ease-out both;
+}
+.bus-intro__brand {
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 5vw, 2rem);
+  letter-spacing: -0.01em;
+}
+.bus-intro__sub {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-marigold);
+}
+@keyframes word-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bus-intro { display: none; }
+  .ripple-layer { display: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   Right-to-left, for Urdu and Kashmiri. Tailwind's physical utilities (ml-*,
+   text-left) do not flip on their own, so mirror the handful that carry the
+   page: auto margins, text alignment, and the header/menu anchoring.
+--------------------------------------------------------------------------- */
+[dir='rtl'] .ml-auto { margin-left: 0; margin-right: auto; }
+[dir='rtl'] .mr-auto { margin-right: 0; margin-left: auto; }
+[dir='rtl'] .text-left { text-align: right; }
+[dir='rtl'] .text-right { text-align: left; }
+[dir='rtl'] .right-0 { right: auto; left: 0; }
+[dir='rtl'] .left-0 { left: auto; right: 0; }
+[dir='rtl'] .right-4 { right: auto; left: 1rem; }
+
+/* ---------------------------------------------------------------------------
+   Phones. The app was laid out mobile-first, but these are the things that
+   only bite on a real handset.
+--------------------------------------------------------------------------- */
+
+/* iOS zooms the whole page when a focused input is under 16px. It is the
+   single most common mobile bug in a form-heavy site, and the fix is simply
+   not to go under 16px on small screens. */
+@media (max-width: 640px) {
+  .field,
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Fingers are not cursors. Give every control a 44px target where the input
+   is coarse, without inflating the same buttons on a desktop. */
+@media (pointer: coarse) {
+  .btn,
+  button,
+  [role='menuitem'],
+  a.btn {
+    min-height: 44px;
+  }
+  .btn.py-1,
+  .btn.py-1\.5 {
+    min-height: 40px;
+  }
+}
+
+/* Notched phones: keep fixed bars clear of the home indicator. */
+:root {
+  --tab-h: 3.75rem;
+  --safe-b: env(safe-area-inset-bottom, 0px);
+}
+
+.pad-safe-b { padding-bottom: var(--safe-b); }
+
+/* The bottom tab bar, and the room the page has to leave for it. */
+.has-tabbar { padding-bottom: calc(var(--tab-h) + var(--safe-b)); }
+
+/* A page's own sticky action bar sits directly above the tab bar. */
+.action-bar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: calc(var(--tab-h) + var(--safe-b));
+  z-index: 30;
+}
+@media (min-width: 1024px) {
+  .action-bar { bottom: 0; }
+}
+
+/* Long words in Devanagari, Tamil and Malayalam can overflow a narrow card. */
+@media (max-width: 640px) {
+  h1, h2, h3, p, li, dd, span { overflow-wrap: anywhere; }
+}

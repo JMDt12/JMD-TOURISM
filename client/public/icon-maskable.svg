@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="JMD">
+  <!-- Maskable: keep art inside the safe circle, Android crops the corners. -->
+  <rect width="512" height="512" fill="#2a1a5e"/>
+  <text x="256" y="298" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif"
+        font-size="128" font-weight="800" fill="#e8930c" letter-spacing="-3">JMD</text>
+</svg>
