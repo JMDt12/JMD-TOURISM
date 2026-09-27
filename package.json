@@ -15,6 +15,9 @@
     "test:build": "vite build --config client/vite.smoke.config.js"
   },
   "workspaces": ["server", "client"],
+  "engines": {
+    "node": ">=22"
+  },
   "devDependencies": {
     "jsdom": "^28.0.1"
   }

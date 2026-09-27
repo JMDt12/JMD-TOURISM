@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { io } from 'socket.io-client';
+import { connectSocket } from '../lib/socket.js';
 import { useApi } from '../lib/useApi.js';
 import MiniMap from '../components/MiniMap.jsx';
 import { Card, Badge, Spinner, ErrorNote, Avatar } from '../components/ui.jsx';
@@ -18,7 +18,7 @@ export default function Track() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const socket = io({ transports: ['websocket', 'polling'] });
+    const socket = connectSocket();
     socket.on('connect', () => {
       setConnected(true);
       socket.emit('trip:subscribe', Number(tripId));

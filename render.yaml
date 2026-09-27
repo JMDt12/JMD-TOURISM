@@ -1,0 +1,30 @@
+# The API server on Render. The website itself is on Vercel (vercel.json),
+# which forwards /api here; live tracking connects here directly.
+services:
+  - type: web
+    name: jmd-tourism-api
+    runtime: node
+    region: singapore        # nearest Render region to Supabase Mumbai
+    plan: free               # sleeps after 15 idle minutes; starter keeps it awake
+    buildCommand: npm ci
+    startCommand: npm start --workspace=server
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      # Vercel's edge, then Render's own proxy, sit in front of the server.
+      - key: TRUST_PROXY
+        value: "2"
+      # The demo GPS simulator must not put fake buses on the live site.
+      - key: SIMULATE_TRIPS
+        value: "off"
+      - key: DATABASE_URL
+        sync: false
+      - key: CLIENT_ORIGIN
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
+      - key: SITE_URL
+        sync: false

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { io } from 'socket.io-client';
+import { connectSocket } from '../lib/socket.js';
 import { api } from '../lib/api.js';
 import { useApi } from '../lib/useApi.js';
 import MiniMap from '../components/MiniMap.jsx';
@@ -221,7 +221,7 @@ function LiveMap() {
   const [positions, setPositions] = useState({});
 
   useEffect(() => {
-    const socket = io({ transports: ['websocket', 'polling'] });
+    const socket = connectSocket();
     socket.on('connect', () => socket.emit('hq:subscribe'));
     socket.on('hq:location', (p) => setPositions((cur) => ({ ...cur, [p.tripId]: p })));
     return () => socket.close();
