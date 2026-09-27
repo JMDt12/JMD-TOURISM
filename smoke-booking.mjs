@@ -11,6 +11,8 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 import { preview } from 'vite';
 
 const API = 'http://localhost:4000';
+/** Staff password from the seed: demo1234 on local SQLite, the printed one on Postgres. */
+const STAFF_PASSWORD = process.env.STAFF_PASSWORD || 'demo1234';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const server = await preview({
@@ -27,7 +29,7 @@ const post = (p, b, token) => fetch(`${API}${p}`, {
 
 const { devCode } = await post('/api/auth/otp/request', { phone: '9812345678' });
 const { token } = await post('/api/auth/otp/verify', { phone: '9812345678', code: devCode });
-const { token: adminToken } = await post('/api/auth/login', { phone: '9000000001', password: 'demo1234' });
+const { token: adminToken } = await post('/api/auth/login', { phone: '9000000001', password: STAFF_PASSWORD });
 
 const errors = [];
 const vc = new VirtualConsole();

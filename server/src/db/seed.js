@@ -17,7 +17,7 @@ const FRESH = process.argv.includes('--fresh');
 const TABLES = [
   'notifications', 'reviews', 'live_locations', 'guide_bookings',
   'bookings', 'guides', 'packages', 'rentals', 'pickup_points', 'trips', 'routes',
-  'buses', 'otp_codes', 'users',
+  'buses', 'otp_codes', 'login_failures', 'users',
 ];
 
 async function wipe() {

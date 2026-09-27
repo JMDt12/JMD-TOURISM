@@ -4,6 +4,12 @@ const DEV_SECRET = 'dev-only-insecure-secret-change-me';
 export const JWT_SECRET = process.env.JWT_SECRET || DEV_SECRET;
 export const USING_DEV_SECRET = JWT_SECRET === DEV_SECRET;
 
+// The dev secret is in the public repository, so anyone could sign an admin
+// token with it. A production server must never start on it.
+if (USING_DEV_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('JWT_SECRET must be set in production. Refusing to start with the public dev secret.');
+}
+
 export function signToken(user) {
   return jwt.sign(
     { sub: user.id, role: user.role, name: user.name, phone: user.phone },

@@ -1,3 +1,4 @@
+import { createHash, randomInt } from 'node:crypto';
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import { query, one } from '../db/index.js';
@@ -15,9 +16,54 @@ const isPhone = (p) => /^[6-9]\d{9}$/.test(String(p || '').trim());
 /** Five guesses is generous for a code the owner can read off their screen. */
 const MAX_OTP_ATTEMPTS = 5;
 
+/**
+ * Codes are stored hashed, so a leaked table cannot be used to sign in during
+ * the ten minutes a code lives. The phone is mixed in so identical codes for
+ * different numbers do not share a hash.
+ */
+const hashCode = (phone, code) => createHash('sha256').update(`${phone}:${code}`).digest('hex');
+
+/**
+ * Password login throttling. Per number stops a targeted guess at one staff
+ * account; per address stops one machine sweeping many numbers. The address
+ * limit is looser because an office shares one connection.
+ */
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const MAX_FAILS_PER_PHONE = 5;
+const MAX_FAILS_PER_IP = 30;
+
+/** Compared against when the number is unknown, so both paths take as long. */
+const DUMMY_HASH = bcrypt.hashSync('timing-equaliser', 10);
+
+const MIN_PASSWORD_LENGTH = 10;
+
+async function loginLocked(phone, ip) {
+  const since = new Date(Date.now() - LOGIN_WINDOW_MS).toISOString();
+  const row = await one(
+    `SELECT
+       (SELECT COUNT(*) FROM login_failures WHERE phone = $1 AND created_at > $3) AS by_phone,
+       (SELECT COUNT(*) FROM login_failures WHERE ip = $2 AND created_at > $3) AS by_ip`,
+    [phone, ip, since]
+  );
+  return Number(row.by_phone) >= MAX_FAILS_PER_PHONE || Number(row.by_ip) >= MAX_FAILS_PER_IP;
+}
+
+async function recordLoginFailure(phone, ip) {
+  const now = Date.now();
+  await query('DELETE FROM login_failures WHERE created_at < $1',
+    [new Date(now - LOGIN_WINDOW_MS).toISOString()]);
+  await query('INSERT INTO login_failures (phone, ip, created_at) VALUES ($1, $2, $3)',
+    [phone, ip, new Date(now).toISOString()]);
+}
+
+const tooManyTries = (res) => res.status(429).json({
+  error: 'Too many wrong passwords. Wait 15 minutes and try again.',
+});
+
 const publicUser = (u) => ({
   id: u.id, name: u.name, phone: u.phone, email: u.email,
   role: u.role, loyaltyPoints: u.loyalty_points, referralCode: u.referral_code,
+  hasPassword: Boolean(u.password_hash),
 });
 
 const makeReferralCode = (name) =>
@@ -43,11 +89,12 @@ router.post('/otp/request', async (req, res) => {
     });
   }
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  // Math.random is predictable from its past output; a login code must not be.
+  const code = String(randomInt(100000, 1000000));
   const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
   await query(
     'INSERT INTO otp_codes (phone, code, expires_at) VALUES ($1, $2, $3)',
-    [phone, code, expires]
+    [phone, hashCode(phone, code), expires]
   );
   await notify({
     channel: 'whatsapp', recipient: phone, template: 'broadcast',
@@ -83,7 +130,7 @@ router.post('/otp/verify', async (req, res) => {
     });
   }
 
-  if (String(live.code) !== code) {
+  if (String(live.code) !== hashCode(phone, code)) {
     await query('UPDATE otp_codes SET attempts = attempts + 1 WHERE id = $1', [live.id]);
     const left = MAX_OTP_ATTEMPTS - (live.attempts + 1);
     return res.status(400).json({
@@ -119,12 +166,51 @@ router.post('/otp/verify', async (req, res) => {
 
 /** Password login, used by guides, drivers and HQ staff. */
 router.post('/login', async (req, res) => {
-  const { phone, password } = req.body;
-  const user = await one('SELECT * FROM users WHERE phone = $1', [String(phone || '').trim()]);
-  if (!user?.password_hash || !(await bcrypt.compare(String(password || ''), user.password_hash))) {
+  const phone = String(req.body.phone || '').trim();
+  const password = String(req.body.password || '');
+  const ip = req.ip || 'unknown';
+  // Checked before the password, so a locked account stays locked even to a
+  // correct guess; otherwise the lock would only slow the attacker down.
+  if (await loginLocked(phone, ip)) return tooManyTries(res);
+
+  const user = await one('SELECT * FROM users WHERE phone = $1', [phone]);
+  const ok = await bcrypt.compare(password, user?.password_hash || DUMMY_HASH);
+  if (!user?.password_hash || !ok) {
+    await recordLoginFailure(phone, ip);
     return res.status(401).json({ error: 'Incorrect phone number or password.' });
   }
+  await query('DELETE FROM login_failures WHERE phone = $1', [phone]);
   res.json({ token: signToken(user), user: publicUser(user) });
+});
+
+/** Change your own password. Requires the current one, and counts wrong guesses. */
+router.post('/password', requireAuth(), async (req, res) => {
+  const current = String(req.body.currentPassword || '');
+  const next = String(req.body.newPassword || '');
+  const ip = req.ip || 'unknown';
+
+  const user = await one('SELECT * FROM users WHERE id = $1', [req.user.sub]);
+  if (!user?.password_hash) {
+    return res.status(400).json({ error: 'This account signs in with a one-time code, not a password.' });
+  }
+  if (await loginLocked(user.phone, ip)) return tooManyTries(res);
+  if (!(await bcrypt.compare(current, user.password_hash))) {
+    await recordLoginFailure(user.phone, ip);
+    return res.status(400).json({ error: 'Your current password is incorrect.' });
+  }
+  if (next.length < MIN_PASSWORD_LENGTH) {
+    return res.status(400).json({ error: `Use at least ${MIN_PASSWORD_LENGTH} characters.` });
+  }
+  if (next === current) {
+    return res.status(400).json({ error: 'Choose a password different from the current one.' });
+  }
+  if (next.toLowerCase().includes('demo1234') || next.includes(user.phone)) {
+    return res.status(400).json({ error: 'That password is too easy to guess. Choose another.' });
+  }
+
+  await query('UPDATE users SET password_hash = $1 WHERE id = $2', [await bcrypt.hash(next, 10), user.id]);
+  await query('DELETE FROM login_failures WHERE phone = $1', [user.phone]);
+  res.json({ ok: true });
 });
 
 router.get('/me', requireAuth(), async (req, res) => {

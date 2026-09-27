@@ -15,6 +15,8 @@ import { JSDOM, VirtualConsole } from 'jsdom';
 import { preview } from 'vite';
 
 const API = 'http://localhost:4000';
+/** Staff password from the seed: demo1234 on local SQLite, the printed one on Postgres. */
+const STAFF_PASSWORD = process.env.STAFF_PASSWORD || 'demo1234';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -83,9 +85,9 @@ const base = 'http://localhost:4180';
 // Tokens for the role-gated pages.
 const tokens = {
   customer: await otpLogin('9812345678'),
-  guide: await login('9000000021', 'demo1234'),
-  driver: await login('9000000012', 'demo1234'),
-  admin: await login('9000000001', 'demo1234'),
+  guide: await login('9000000021', STAFF_PASSWORD),
+  driver: await login('9000000012', STAFF_PASSWORD),
+  admin: await login('9000000001', STAFF_PASSWORD),
 };
 
 // A real reference so the ticket page has something to render. It has to be a

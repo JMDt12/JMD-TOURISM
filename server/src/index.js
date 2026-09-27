@@ -29,6 +29,11 @@ const server = http.createServer(app);
 const io = new SocketServer(server, { cors: { origin: ORIGIN } });
 const tracker = new Tracker(io);
 
+// Behind a host's proxy every request arrives from the proxy's address, which
+// would make the per-address login limit lock out everyone at once. Set
+// TRUST_PROXY to the number of proxies in front (usually 1) so req.ip is the
+// visitor's own address.
+if (process.env.TRUST_PROXY) app.set('trust proxy', Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
 app.use(cors({ origin: ORIGIN }));
 app.use(express.json({ limit: '1mb' }));
 app.use(optionalAuth);

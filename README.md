@@ -51,12 +51,19 @@ Requires Node 20.6+ (developed on 24).
 | Driver | 9000000012 | demo1234 |
 | HQ admin | 9000000001 | demo1234 |
 
+`demo1234` applies only to the local SQLite file. Seeding a real database (`DATABASE_URL` set)
+writes a random staff password and prints it once; set `SEED_PASSWORD` to choose it. Staff can
+change their password from the Profile page.
+
 ### Tests
 
 ```bash
 npm run dev:server   # in one terminal
 npm test             # in another
 ```
+
+Run the suites against local SQLite, not a shared database: they create bookings and sign-ups.
+If the API is on Postgres, pass its staff password as `STAFF_PASSWORD`.
 
 `npm test` runs three suites.
 

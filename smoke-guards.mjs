@@ -9,6 +9,8 @@
  * Requires the API on :4000.
  */
 const API = 'http://localhost:4000';
+/** Staff password from the seed: demo1234 on local SQLite, the printed one on Postgres. */
+const STAFF_PASSWORD = process.env.STAFF_PASSWORD || 'demo1234';
 
 const steps = [];
 const step = (m) => { steps.push(m); console.log(`  ok  ${m}`); };
@@ -44,7 +46,7 @@ try {
     method: 'POST', body: { phone: '9812345678', code: otp.json.devCode },
   })).json;
   const { token: adminToken } = (await call('/api/auth/login', {
-    method: 'POST', body: { phone: '9000000001', password: 'demo1234' },
+    method: 'POST', body: { phone: '9000000001', password: STAFF_PASSWORD },
   })).json;
   must(token && adminToken, 'could not sign in for the guard tests');
 
@@ -189,6 +191,39 @@ try {
   }
   must(sends.includes(429), `OTP sends were never capped: ${sends.join(',')}`);
   step(`repeat sends to one number are capped after ${sends.indexOf(429)}`);
+
+  // -- the staff password --------------------------------------------------
+  // Staff log in with a password, and HQ's opens the whole control room.
+  // Guessing it has to stop quickly. An unused number keeps the lock off the
+  // real staff accounts the other suites sign in with.
+  const pwPhone = freshPhone();
+  const tries = [];
+  for (let i = 0; i < 7; i += 1) {
+    tries.push((await call('/api/auth/login', {
+      method: 'POST', body: { phone: pwPhone, password: `wrong-${i}` },
+    })).status);
+  }
+  must(!tries.includes(200), 'a wrong password was accepted');
+  must(tries.includes(429), `wrong passwords were never rate-limited: ${tries.join(',')}`);
+  must(tries.indexOf(429) <= 5, `too many password guesses allowed (${tries.indexOf(429)})`);
+  step(`wrong passwords are refused, then locked out after ${tries.indexOf(429)} attempts`);
+
+  // Changing a password must prove the old one, and refuse a weak new one.
+  const wrongCurrent = await call('/api/auth/password', {
+    method: 'POST', token: adminToken,
+    body: { currentPassword: 'not-the-password', newPassword: 'a-much-longer-password' },
+  });
+  must(wrongCurrent.status === 400, `password changed without the current one (${wrongCurrent.status})`);
+  const tooShort = await call('/api/auth/password', {
+    method: 'POST', token: adminToken,
+    body: { currentPassword: STAFF_PASSWORD, newPassword: 'short' },
+  });
+  must(tooShort.status === 400, `a 5-character password was accepted (${tooShort.status})`);
+  const anonymous = await call('/api/auth/password', {
+    method: 'POST', body: { currentPassword: STAFF_PASSWORD, newPassword: 'a-much-longer-password' },
+  });
+  must(anonymous.status === 401, `password change worked without signing in (${anonymous.status})`);
+  step('changing a password needs a session, the current password, and 10+ characters');
 
   console.log(`\nGuard rails passed (${steps.length} checks).`);
   process.exit(0);

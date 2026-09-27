@@ -24,6 +24,17 @@ CREATE TABLE IF NOT EXISTS otp_codes (
 );
 CREATE INDEX IF NOT EXISTS idx_otp_phone ON otp_codes(phone);
 
+-- Wrong passwords, kept briefly so password login can be throttled per
+-- number and per address. Rows older than the window are pruned on write.
+CREATE TABLE IF NOT EXISTS login_failures (
+  id         SERIAL PRIMARY KEY,
+  phone      TEXT NOT NULL,
+  ip         TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_login_failures_phone ON login_failures(phone);
+CREATE INDEX IF NOT EXISTS idx_login_failures_ip ON login_failures(ip);
+
 CREATE TABLE IF NOT EXISTS buses (
   id              SERIAL PRIMARY KEY,
   operator_id     INTEGER REFERENCES users(id),

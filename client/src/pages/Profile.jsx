@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useLang, useT } from '../context/LanguageContext.jsx';
 import LanguagePicker from '../components/LanguagePicker.jsx';
-import { Card, Empty, Avatar } from '../components/ui.jsx';
+import { Card, Empty, Avatar, Field } from '../components/ui.jsx';
+import { api } from '../lib/api.js';
 
 export default function Profile() {
   const { user, signOut } = useAuth();
@@ -77,6 +78,8 @@ export default function Profile() {
         </button>
       </Card>
 
+      {user.hasPassword && <ChangePassword />}
+
       <div className="mt-6 flex flex-wrap gap-3">
         <Link to="/my-trips" className="btn btn-ink">{t('nav.myTrips')}</Link>
         <Link to="/tracker" className="btn btn-ghost">{t('menu.tracker')}</Link>
@@ -87,6 +90,64 @@ export default function Profile() {
 
       {picking && <LanguagePicker force onClose={() => setPicking(false)} />}
     </div>
+  );
+}
+
+/** Staff sign in with a password; customers use a one-time code and never see this. */
+function ChangePassword() {
+  const t = useT();
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [done, setDone] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setDone(false);
+    if (next !== confirm) { setError(t('profile.pwMismatch')); return; }
+    setBusy(true);
+    try {
+      await api.post('/auth/password', { currentPassword: current, newPassword: next });
+      setCurrent(''); setNext(''); setConfirm('');
+      setDone(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="mt-4 p-5">
+      <p className="text-[10px] font-bold tracking-[0.1em] text-ink-soft uppercase">
+        {t('profile.pwTitle')}
+      </p>
+      <form className="mt-3 space-y-3" onSubmit={submit}>
+        <Field label={t('profile.pwCurrent')} id="pw-current">
+          <input id="pw-current" type="password" className="field" value={current}
+                 autoComplete="current-password" required
+                 onChange={(e) => setCurrent(e.target.value)} />
+        </Field>
+        <Field label={t('profile.pwNew')} id="pw-new" hint={t('profile.pwHint')}>
+          <input id="pw-new" type="password" className="field" value={next}
+                 autoComplete="new-password" minLength={10} required
+                 onChange={(e) => setNext(e.target.value)} />
+        </Field>
+        <Field label={t('profile.pwConfirm')} id="pw-confirm">
+          <input id="pw-confirm" type="password" className="field" value={confirm}
+                 autoComplete="new-password" minLength={10} required
+                 onChange={(e) => setConfirm(e.target.value)} />
+        </Field>
+        {error && <p className="text-sm text-sindoor" role="alert">{error}</p>}
+        {done && <p className="text-sm text-peacock" role="status">{t('profile.pwDone')}</p>}
+        <button className="btn btn-primary py-1.5 text-sm" disabled={busy}>
+          {busy ? t('profile.pwSaving') : t('profile.pwSave')}
+        </button>
+      </form>
+    </Card>
   );
 }
 

@@ -164,6 +164,15 @@ const en = {
   'profile.notSignedIn': 'You are not signed in',
   'profile.signInBody': 'Sign in to see your requests, tickets and loyalty points.',
   'profile.copied': 'Copied',
+  'profile.pwTitle': 'Change password',
+  'profile.pwCurrent': 'Current password',
+  'profile.pwNew': 'New password',
+  'profile.pwConfirm': 'Type the new password again',
+  'profile.pwHint': 'At least 10 characters.',
+  'profile.pwMismatch': 'The two new passwords do not match.',
+  'profile.pwSave': 'Change password',
+  'profile.pwSaving': 'Saving…',
+  'profile.pwDone': 'Password changed. Use the new one next time you sign in.',
 
   // --- tracker --------------------------------------------------------------------
   'tracker.title': 'Live trip tracker',
@@ -338,6 +347,15 @@ const hi = {
   'profile.notSignedIn': 'आप साइन इन नहीं हैं',
   'profile.signInBody': 'अपने अनुरोध, टिकट और अंक देखने के लिए साइन इन कीजिए।',
   'profile.copied': 'कॉपी हो गया',
+  'profile.pwTitle': 'पासवर्ड बदलें',
+  'profile.pwCurrent': 'मौजूदा पासवर्ड',
+  'profile.pwNew': 'नया पासवर्ड',
+  'profile.pwConfirm': 'नया पासवर्ड दोबारा लिखिए',
+  'profile.pwHint': 'कम से कम 10 अक्षर।',
+  'profile.pwMismatch': 'दोनों नए पासवर्ड एक जैसे नहीं हैं।',
+  'profile.pwSave': 'पासवर्ड बदलें',
+  'profile.pwSaving': 'सेव हो रहा है…',
+  'profile.pwDone': 'पासवर्ड बदल गया। अगली बार नए पासवर्ड से साइन इन कीजिए।',
 
   'tracker.title': 'लाइव ट्रिप ट्रैकर',
   'tracker.body':
