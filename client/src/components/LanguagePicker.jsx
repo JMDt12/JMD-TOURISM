@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLang } from '../context/LanguageContext.jsx';
 import { BRAND } from '../lib/brand.js';
+import { lockScroll } from '../lib/scrollLock.js';
 
 /**
  * The language choice.
@@ -25,11 +26,10 @@ export default function LanguagePicker({ force = false, onClose }) {
       if (e.key === 'Escape' && force) onClose?.();
     };
     document.addEventListener('keydown', onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const release = lockScroll();
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = prev;
+      release();
     };
   }, [open, force, onClose]);
 

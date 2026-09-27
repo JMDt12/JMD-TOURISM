@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BRAND } from '../lib/brand.js';
+import { lockScroll } from '../lib/scrollLock.js';
 
 /**
  * The arrival.
@@ -25,13 +26,12 @@ export default function BusIntro() {
     window.addEventListener('pointerdown', finish, { once: true });
     window.addEventListener('keydown', finish, { once: true });
     // Nothing behind should scroll while the curtain is down.
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    const release = lockScroll();
     return () => {
       clearTimeout(timer);
       window.removeEventListener('pointerdown', finish);
       window.removeEventListener('keydown', finish);
-      document.body.style.overflow = prev;
+      release();
     };
   }, [state]);
 
