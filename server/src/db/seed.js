@@ -6,8 +6,9 @@
  * Run with: npm run seed --workspace=server   (add --fresh to wipe first)
  */
 import 'dotenv/config';
+import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
-import { query, migrate, getDb, jsonParam } from './index.js';
+import { query, migrate, getDb, json, jsonParam } from './index.js';
 import { CITIES, haversine } from '../lib/geo.js';
 import { LAYOUTS, allSeats } from '../lib/seats.js';
 
@@ -72,7 +73,11 @@ async function seed() {
     return;
   }
 
-  const pw = await bcrypt.hash('demo1234', 10);
+  // demo1234 is published in the README, so it is only acceptable on the
+  // throwaway local SQLite file. A real database gets a random password.
+  const password = process.env.SEED_PASSWORD
+    || (dialect === 'postgres' ? randomBytes(9).toString('base64url') : 'demo1234');
+  const pw = await bcrypt.hash(password, 10);
 
   // ---- People -------------------------------------------------------------
   await insert('users', {
@@ -642,7 +647,7 @@ async function seed() {
   const bookingId = await insert('bookings', {
     reference: 'JMD-DEMO01', user_id: customer, trip_id: pastTrip.id,
     travel_date: new Date().toISOString().slice(0, 10),
-    seats_booked: jsonParam(allSeats(JSON.parse(pastTrip.seat_layout))),
+    seats_booked: jsonParam(allSeats(json(pastTrip.seat_layout, {}))),
     party_size: 26,
     passengers: jsonParam([{ name: 'Demo Traveller', age: 32, gender: 'M' }]),
     pickup_point_id: pickupIds.Delhi[0], addons: jsonParam([]),
@@ -662,7 +667,7 @@ async function seed() {
   console.log(`  ${rentalSeed.filter((r) => r.kind === 'car').length} cars, ` +
     `${rentalSeed.filter((r) => r.kind === 'bike').length} bikes, ` +
     `${rentalSeed.filter((r) => r.kind === 'room').length} room types`);
-  console.log('  Demo customer: 9812345678 | Admin: 9000000001 | password demo1234');
+  console.log(`  Demo customer: 9812345678 | Admin: 9000000001 | password ${password}`);
   console.log('  OTP login works for any phone; in dev the code is returned by the API.');
 }
 

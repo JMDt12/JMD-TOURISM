@@ -52,7 +52,15 @@ let impl;
 
 async function createPgDriver(url) {
   const { default: pg } = await import('pg');
-  const pool = new pg.Pool({ connectionString: url });
+  // Hosted Postgres (Supabase, Neon, RDS) requires TLS; a local server usually
+  // has none. PGSSL=off forces plain connections for an unusual remote setup.
+  const host = new URL(url).hostname;
+  const local = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  const ssl = local || process.env.PGSSL === 'off' ? false : { rejectUnauthorized: false };
+  const pool = new pg.Pool({ connectionString: url, ssl });
+  // Poolers close idle connections; without a listener that error kills the
+  // process. The pool discards the dead client and opens a fresh one on demand.
+  pool.on('error', (err) => console.error('Postgres idle client error:', err.message));
   return {
     dialect: 'postgres',
     async query(sql, params = []) {
@@ -115,7 +123,23 @@ export async function migrate() {
   const db = await getDb();
   const pgSql = fs.readFileSync(SCHEMA_PATH, 'utf8');
   await db.exec(db.dialect === 'postgres' ? pgSql : toSqliteSchema(pgSql));
+  if (db.dialect === 'postgres') await lockPublicTables(db);
   return db.dialect;
+}
+
+/**
+ * Supabase publishes every table in `public` through its REST API to anyone
+ * holding the project's publishable key, which ships to browsers. Row Level
+ * Security with no policies denies that path entirely; this server connects
+ * as the table owner, so its own queries are unaffected.
+ */
+async function lockPublicTables(db) {
+  const tables = await db.query(
+    `SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND NOT rowsecurity`
+  );
+  for (const { tablename } of tables) {
+    await db.exec(`ALTER TABLE public."${tablename}" ENABLE ROW LEVEL SECURITY`);
+  }
 }
 
 /**
