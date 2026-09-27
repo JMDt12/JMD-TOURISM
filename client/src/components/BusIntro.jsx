@@ -1,23 +1,32 @@
 import { useEffect, useState } from 'react';
 import { BRAND } from '../lib/brand.js';
-import { lockScroll } from '../lib/scrollLock.js';
 
 /**
  * The arrival.
  *
- * On every page load a bus drives out of the distance straight at the viewer,
- * headlights first, then the curtain lifts on the site. It runs once per page
- * load (not per route change, which would be maddening), any click or key
- * skips it, and it is skipped outright for anyone who asks for reduced motion.
+ * A bus drives out of the distance straight at the viewer, headlights first,
+ * then the curtain lifts on the site. It is decoration, so it never gets in
+ * the way: it plays once per browser session (phones reload tabs constantly,
+ * and it used to replay on every load), it lets every tap and swipe straight
+ * through to the page (it used to block the screen for two seconds and
+ * swallow the first tap - on iPhones that tap was simply lost), any touch or
+ * key ends it early, and reduced motion skips it outright.
  */
-const DURATION = 2000;
+const DURATION = 1200;
+const SEEN_KEY = 'jmd.introSeen';
+
+function shouldPlay() {
+  if (typeof window === 'undefined') return false;
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return false;
+  try {
+    if (sessionStorage.getItem(SEEN_KEY)) return false;
+    sessionStorage.setItem(SEEN_KEY, '1');
+  } catch { /* private mode: play it, it is harmless now */ }
+  return true;
+}
 
 export default function BusIntro() {
-  const [state, setState] = useState(() => {
-    if (typeof window === 'undefined') return 'done';
-    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
-    return reduced ? 'done' : 'running';
-  });
+  const [state, setState] = useState(() => (shouldPlay() ? 'running' : 'done'));
 
   useEffect(() => {
     if (state !== 'running') return undefined;
@@ -25,13 +34,10 @@ export default function BusIntro() {
     const timer = setTimeout(finish, DURATION);
     window.addEventListener('pointerdown', finish, { once: true });
     window.addEventListener('keydown', finish, { once: true });
-    // Nothing behind should scroll while the curtain is down.
-    const release = lockScroll();
     return () => {
       clearTimeout(timer);
       window.removeEventListener('pointerdown', finish);
       window.removeEventListener('keydown', finish);
-      release();
     };
   }, [state]);
 
